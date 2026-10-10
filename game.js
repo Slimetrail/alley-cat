@@ -19,9 +19,9 @@ function updMute(){muteB.textContent=muted?"🔇":"🔊"}updMute();
 muteB.onclick=e=>{e.stopPropagation();muted=!muted;LS.set("ac_mute",muted?"1":"0");updMute()};
 function beep(f,d=.1,type="square",f2){if(muted)return;try{AC=AC||new(window.AudioContext||window.webkitAudioContext)();const o=AC.createOscillator(),v=AC.createGain(),t=AC.currentTime;o.type=type;o.frequency.setValueAtTime(f,t);if(f2)o.frequency.exponentialRampToValueAtTime(f2,t+d);v.gain.setValueAtTime(.08,t);v.gain.exponentialRampToValueAtTime(.001,t+d);o.connect(v).connect(AC.destination);o.start(t);o.stop(t+d)}catch(e){}}
 // ===== State =====
-const S={mode:"start",t:0,speed:0,dist:0,fish:0,lane:0,x:0,y:0,vy:0,slide:0,stumble:0,gap:3,objs:[],deco:[],nextRow:20,caughtT:0,best:+LS.get("ac_best","0")||0,flash:0,lives:3,inv:0};
+const S={mode:"start",t:0,speed:0,dist:0,fish:0,lane:0,x:0,y:0,vy:0,slide:0,stumble:0,gap:3,objs:[],deco:[],nextRow:20,caughtT:0,best:+LS.get("ac_best","0")||0,flash:0,lives:3,inv:0,hits:0,hitT:0,appT:0,hankY:0};
 window.__ac=S;
-function reset(){Object.assign(S,{mode:"run",t:0,speed:9,dist:0,fish:0,lane:0,x:0,y:0,vy:0,slide:0,stumble:0,gap:3,objs:[],nextRow:25,caughtT:0,lives:3,inv:0});S.deco=[];updLives();for(let z=0;z<80;z+=6)addDeco(z)}
+function reset(){Object.assign(S,{mode:"run",t:0,speed:9,dist:0,fish:0,lane:0,x:0,y:0,vy:0,slide:0,stumble:0,gap:3,objs:[],nextRow:25,caughtT:0,lives:3,inv:0,hits:0,hitT:0,appT:0,hankY:0});S.deco=[];updLives();for(let z=0;z<80;z+=6)addDeco(z)}
 function addDeco(z){const side=Math.random()<.5?-1:1;S.deco.push({z,side,k:["can","escape","puddle","bin"][Math.random()*4|0]})}
 const spawn=(type,lane,z)=>S.objs.push({type,lane,z});window.__spawn=spawn;
 // Row generator: cans in random lanes (1 or 2 blocked, never 3); long brooms/mops span 1-3 lanes (jumpable);
@@ -80,12 +80,13 @@ $("topBtn").onclick=()=>{$("boardList").innerHTML=boardHTML(-1);$("start").class
 $("boardBack").onclick=()=>{$("board").classList.add("hidden");showStart();$("start").classList.remove("hidden")};
 $("home").onclick=()=>{$("over").classList.add("hidden");S.mode="start";showStart();$("start").classList.remove("hidden")};
 function updLives(){$("lives").textContent="❤️".repeat(S.lives)+"🤍".repeat(3-S.lives)}
-function hit(){if(S.inv>0)return;if(S.stumble>0){S.mode="caught";S.caughtT=0;beep(200,.5,"triangle",600);return}S.stumble=5;S.flash=.6;beep(150,.25,"sawtooth",80)}
+// Hits ARE the lives (3 hearts). Hit 1: Hank's head peeks in. Hit 2: half his body. Hit 3: full-screen lick scene, then game over.
+function hit(){if(S.inv>0||S.mode!=="run")return;if(S.hits===0)S.appT=0;S.hits++;S.lives=3-S.hits;updLives();S.flash=.6;if(S.hits>=3){S.mode="caught";S.caughtT=0;beep(200,.5,"triangle",600);return}S.inv=1.2;beep(150,.25,"sawtooth",80)}
 // ===== Update =====
-function update(dt){S.t+=dt;if(S.mode==="caught"){S.caughtT+=dt;S.gap=Math.max(.2,S.gap-dt*4);if(S.caughtT>1.8){S.lives--;updLives();if(S.lives<=0)gameOver();else{S.mode="run";S.gap=3.5;S.stumble=0;S.inv=2.5;S.objs=S.objs.filter(o=>o.z>12)}}return}if(S.mode!=="run")return;
+function update(dt){S.t+=dt;if(S.mode==="caught"){S.caughtT+=dt;if(S.caughtT>2.6)gameOver();return}if(S.mode!=="run")return;
  S.speed=Math.min(26,9+S.t*.25);const dz=S.speed*dt;S.dist+=dz;
  S.x+=(S.lane-S.x)*Math.min(1,dt*14);S.vy-=28*dt;S.y=Math.max(0,S.y+S.vy*dt);if(S.y===0)S.vy=Math.max(0,S.vy);S.slide=Math.max(0,S.slide-dt);
- S.stumble=Math.max(0,S.stumble-dt);S.flash=Math.max(0,S.flash-dt);S.inv=Math.max(0,S.inv-dt);S.gap+=((S.stumble>0?1.1:3)-S.gap)*Math.min(1,dt*3);
+ S.appT+=dt;S.stumble=S.hits;S.flash=Math.max(0,S.flash-dt);S.inv=Math.max(0,S.inv-dt);S.gap+=((S.stumble>0?1.1:3)-S.gap)*Math.min(1,dt*3);
  for(const o of S.objs)o.z-=dz;for(const d of S.deco)d.z-=dz;
  if(!TEST){S.nextRow-=dz;if(S.nextRow<=0){genRow(60);S.nextRow=Math.max(11,18-S.t*.08)+Math.random()*8}}
  S.deco=S.deco.filter(d=>d.z>-3);while(S.deco.length<14)addDeco(Math.max(...S.deco.map(d=>d.z),0)+6);
@@ -95,7 +96,7 @@ function update(dt){S.t+=dt;if(S.mode==="caught"){S.caughtT+=dt;S.gap=Math.max(.
  S.objs=S.objs.filter(o=>o.z>-3&&!(o.done&&o.type==="fish"));
  $("fish").textContent="🐟 "+S.fish;$("dist").textContent=Math.floor(S.dist)+" m"}
 // ===== Projection =====
-const D=5;function P(x,z,y=0){const s=D/(D+z),hz=H*.36,gy=H*.86;return{x:W/2+x*W*.3*s,y:hz+(gy-hz)*s-y*W*.3*s,s}}
+const D=5;function P(x,z,y=0){const s=D/(D+z),hz=H*.34,gy=H*.76;return{x:W/2+x*W*.3*s,y:hz+(gy-hz)*s-y*W*.3*s,s}}
 // ===== Drawing =====
 function drawCat(c,cat,run,sc,slide,jump,still){c.save();c.scale(sc,sc);const leg=still?0:Math.sin(run*18)*6,F=cat.fluff||0,pl=cat.plush?1.15:1,sl=cat.slim?.88:1;
  if(slide){c.scale(1.25,.6);c.translate(0,14)}
@@ -130,9 +131,9 @@ function drawHank(c,sc,run){c.save();c.scale(sc,sc);const b=Math.abs(Math.sin(ru
  // tail wagging up behind, white tip
  c.strokeStyle=K;c.lineWidth=7;c.lineCap="round";const tw=Math.sin(run*14)*12;c.beginPath();c.moveTo(0,-10);c.quadraticCurveTo(tw,-40,tw*1.5,-58);c.stroke();c.fillStyle=W_;c.beginPath();c.arc(tw*1.5,-58,5,0,7);c.fill();
  // body with black saddle
- c.fillStyle=W_;c.beginPath();c.ellipse(0,4,28,20,0,0,7);c.fill();c.fillStyle=K;c.beginPath();c.ellipse(0,-6,26,11,0,3.14,6.29);c.fill();c.fillStyle=T;c.beginPath();c.ellipse(-24,2,6,10,0,0,7);c.ellipse(24,2,6,10,0,0,7);c.fill();
+ c.fillStyle=W_;c.beginPath();c.ellipse(0,4,28,20,0,0,7);c.fill();c.fillStyle=K;c.beginPath();c.ellipse(0,-6,26,11,0,3.14,6.29);c.fill();c.fillStyle=T;c.beginPath();c.ellipse(-22,-2,8,10,0,0,7);c.ellipse(22,-2,8,10,0,0,7);c.fill();c.fillStyle=W_;c.beginPath();c.ellipse(0,-6,18,6,0,0,7);c.fill();
  // legs (white)
- c.fillStyle=W_;const l=Math.sin(run*16)*5;[[-14,l],[14,-l]].forEach(([x,y])=>{c.beginPath();c.ellipse(x,24+y,7,10,0,0,7);c.fill()});
+ c.fillStyle=W_;const l=Math.sin(run*16)*5;[[-14,l],[14,-l]].forEach(([x,y])=>{c.beginPath();c.ellipse(x,22+y,7,7,0,0,7);c.fill()});
  // head (tan), white chest
  c.fillStyle=W_;c.beginPath();c.ellipse(0,8,14,12,0,0,7);c.fill();
  const hy=-18;c.fillStyle=T;c.beginPath();c.ellipse(0,hy,20,18,0,0,7);c.fill();
@@ -145,6 +146,75 @@ function drawHank(c,sc,run){c.save();c.scale(sc,sc);const b=Math.abs(Math.sin(ru
   c.strokeStyle="#5b3412";c.lineWidth=2;c.beginPath();c.moveTo(x-5,hy-9+(x<0?0:-3));c.lineTo(x+5,hy-9+(x<0?-3:0));c.stroke()});
  c.fillStyle=K;c.beginPath();c.ellipse(0,hy+5,6,4.5,0,0,7);c.fill();c.fillStyle="#fff";c.beginPath();c.arc(-2,hy+4,1.3,0,7);c.fill();
  c.fillStyle="#f472b6";c.beginPath();c.ellipse(0,hy+15,4,5+b*-.3,0,0,7);c.fill();c.restore()}
+// Back view (running away from camera toward the cat): basset proportions, long low body, short legs
+function drawHankBack(c,sc,run){c.save();c.scale(sc,sc);const b=Math.abs(Math.sin(run*12))*-4,ef=Math.sin(run*12)*.6;c.translate(0,b);
+ const W_="#fafaf9",T="#b8692e",K="#1c1917",l=Math.sin(run*16)*4;
+ // short white legs, white feet
+ c.fillStyle=W_;[[-17,l],[17,-l]].forEach(([x,y])=>{c.beginPath();c.ellipse(x,26+y,7,7,0,0,7);c.fill()});
+ // head + droopy ears (farthest)
+ const hy=-34;c.fillStyle=T;c.beginPath();c.ellipse(0,hy,15,13,0,0,7);c.fill();
+ [-1,1].forEach(s=>{c.save();c.translate(s*12,hy-2);c.rotate(s*(.3+ef*s*.6));c.fillStyle="#7a3f17";c.beginPath();c.ellipse(s*3,13,7,17,0,0,7);c.fill();c.restore()});
+ // white collar ring
+ c.fillStyle=W_;c.beginPath();c.ellipse(0,-21,16,6,0,0,7);c.fill();
+ // long low body: white belly, big black saddle, tan shoulders and rump
+ c.fillStyle=W_;c.beginPath();c.ellipse(0,6,27,22,0,0,7);c.fill();
+ c.fillStyle=T;c.beginPath();c.ellipse(-14,-12,9,7,0,0,7);c.ellipse(14,-12,9,7,0,0,7);c.fill();
+ c.fillStyle=K;c.beginPath();c.ellipse(0,-2,25,17,0,0,7);c.fill();
+ c.fillStyle=T;c.beginPath();c.ellipse(0,15,23,11,0,0,7);c.fill();c.fillStyle=W_;c.beginPath();c.ellipse(0,9,4,2.5,0,0,7);c.fill();// tan rump + small white mark
+ // long black tail with tan base and white tip, wagging
+ const tw=Math.sin(run*14)*16;c.lineCap="round";c.strokeStyle=K;c.lineWidth=6;c.beginPath();c.moveTo(0,14);c.quadraticCurveTo(tw*.6,-6,tw*1.4,-34);c.stroke();
+ c.strokeStyle=T;c.lineWidth=7;c.beginPath();c.moveTo(0,14);c.lineTo(tw*.15,6);c.stroke();c.fillStyle=W_;c.beginPath();c.ellipse(tw*1.4,-36,4,6,0,0,7);c.fill();
+ c.restore()}
+function drawLickScene(c,cat,t){const k=Math.min(W,H*.6)/390*.82,cx=W*.6,cy=H*.62,lk=(Math.sin(t*8)+1)/2,fade=Math.min(1,t*4);
+ c.save();c.globalAlpha=fade;const bg=c.createRadialGradient(W/2,H/2,50,W/2,H/2,H*.7);bg.addColorStop(0,"#fde68a");bg.addColorStop(1,"#f59e0b");c.fillStyle=bg;c.fillRect(0,0,W,H);
+ c.fillStyle="#ffffff30";for(let i=0;i<12;i++){c.beginPath();c.moveTo(W/2,H/2);c.arc(W/2,H/2,H,i*.52+t*.3,i*.52+.26+t*.3);c.fill()}
+ c.translate(cx,cy);c.scale(k,k);
+ // --- cat (big head + shoulders) ---
+ const F=cat.fluff||0,fur=cat.fur;
+ c.fillStyle=fur;c.beginPath();c.ellipse(0,150,150,90,0,Math.PI,0);c.fill();c.fillRect(-150,150,300,300);
+ c.fillStyle=cat.chest;c.beginPath();cat.chestSpot?c.ellipse(0,170,22,26,0,0,7):c.ellipse(0,190,70,70,0,0,7);c.fill();
+ if(F){c.fillStyle=fur;for(let i=0;i<14;i++){const a=Math.PI+i/13*Math.PI;c.beginPath();c.arc(Math.cos(a)*112,40+Math.sin(a)*96,22,0,7);c.fill()}}
+ // ears (flattened, grumpy)
+ [-1,1].forEach(s=>{c.fillStyle=fur;c.beginPath();c.moveTo(s*40,-70);c.lineTo(s*135,-75);c.lineTo(s*90,-10);c.fill();c.fillStyle=cat.ear;c.beginPath();c.moveTo(s*55,-60);c.lineTo(s*118,-68);c.lineTo(s*88,-25);c.fill()});
+ c.fillStyle=fur;c.beginPath();c.ellipse(0,20,115,(cat.plush?105:98),0,0,7);c.fill();
+ if(F){for(let i=0;i<10;i++){const a=.3+i/9*2.5;c.beginPath();c.arc(Math.cos(a)*112,20+Math.sin(a)*92,18,0,7);c.fill()}}
+ if(cat.pattern==="tabby"||cat.pattern==="tiger"){c.strokeStyle=cat.pat;c.lineWidth=11;c.lineCap="round";[-30,0,30].forEach(x=>{c.beginPath();c.moveTo(x,-72);c.lineTo(x*.8,-30);c.stroke()});
+  [-1,1].forEach(s=>[0,26,52].forEach(y=>{c.beginPath();c.moveTo(s*112,y);c.lineTo(s*72,y+8);c.stroke()}))}
+ if(cat.pattern==="tuxedo"){c.fillStyle=cat.muzzle;c.beginPath();c.moveTo(0,-5);c.quadraticCurveTo(-65,70,-55,90);c.lineTo(55,90);c.quadraticCurveTo(65,70,0,-5);c.fill()}
+ // muzzle
+ c.fillStyle=cat.muzzle;c.beginPath();c.ellipse(-24,62,30,24,0,0,7);c.ellipse(24,62,30,24,0,0,7);c.fill();
+ c.fillStyle="#ec4899";c.beginPath();c.moveTo(-12,42);c.lineTo(12,42);c.lineTo(0,56);c.fill();
+ c.strokeStyle="#000";c.lineWidth=3.5;c.beginPath();c.moveTo(-26,92);c.quadraticCurveTo(0,76,26,92);c.stroke();// frown
+ // grumpy half-closed eyes
+ [-1,1].forEach(s=>{const ex=s*45,ey=8;c.fillStyle=cat.eyes;c.beginPath();c.ellipse(ex,ey,22,17,0,0,7);c.fill();c.fillStyle="#000";c.beginPath();c.ellipse(ex,ey+3,6,12,0,0,7);c.fill();
+  c.fillStyle=fur;c.beginPath();c.ellipse(ex,ey-12,27,17,s*.25,0,7);c.fill();c.strokeStyle="#000";c.lineWidth=5;c.beginPath();c.moveTo(ex-24,ey-4+s*-4*0);c.lineTo(ex+24,ey-2+(s<0?-6:6)*-1);c.stroke();
+  c.fillStyle="#fff";c.beginPath();c.arc(ex+8,ey+6,3.5,0,7);c.fill()});
+ c.strokeStyle=cat.whiskers||"#ffffffcc";c.lineWidth=2;[-1,1].forEach(s=>[-6,4,14].forEach(d=>{c.beginPath();c.moveTo(s*40,64);c.lineTo(s*(cat.whiskers?160:130),56+d*1.6);c.stroke()}));
+ // wet shine
+ c.fillStyle="#ffffff55";[[-50,-40,24,9,-.5],[30,-55,18,7,.4],[80,20,12,5,1]].forEach(([x,y,a,b,r])=>{c.beginPath();c.ellipse(x,y,a,b,r,0,7);c.fill()});
+ // slobber puddle on head
+ c.fillStyle="#bae6fdcc";c.strokeStyle="#38bdf8";c.lineWidth=3;c.beginPath();c.ellipse(-40,-80,60,18,-.15,0,7);c.fill();c.stroke();
+ // drips running down & falling off
+ for(let i=0;i<8;i++){const ph=(t*.9+i*.37)%1,x=[-118,-104,-92,92,106,120,-62,-20][i],y0=x>-70&&x<0?-88:-40,y=y0+ph*(x>-70&&x<0?40:240);c.globalAlpha=fade*(1-ph*.5);
+  c.fillStyle="#bae6fd";c.beginPath();c.moveTo(x-4,y0);c.lineTo(x+4,y0);c.lineTo(x+3,y-10);c.quadraticCurveTo(x+12,y+6,x,y+10);c.quadraticCurveTo(x-12,y+6,x-3,y-10);c.fill();c.stroke()}
+ c.globalAlpha=fade;
+ // --- Hank from the left, licking the cat's head ---
+ c.save();c.translate(-175,-175);c.rotate(.35);const W_="#fafaf9",T="#b8692e";
+ c.fillStyle=W_;c.beginPath();c.ellipse(-120,190,150,70,0,0,7);c.fill();c.fillStyle="#1c1917";c.beginPath();c.ellipse(-150,150,140,55,0,0,7);c.fill();c.fillStyle=T;c.beginPath();c.ellipse(-30,150,45,40,0,0,7);c.fill();c.fillStyle=W_;c.beginPath();c.ellipse(5,95,40,55,.4,0,7);c.fill();
+ c.fillStyle=T;c.beginPath();c.ellipse(0,0,95,85,0,0,7);c.fill();c.beginPath();c.ellipse(85,30,80,48,.1,0,7);c.fill();// snout to the right
+ c.fillStyle=W_;c.beginPath();c.ellipse(100,40,70,38,.1,0,7);c.fill();c.beginPath();c.moveTo(-10,-82);c.lineTo(20,-82);c.lineTo(70,10);c.lineTo(20,20);c.fill();// blaze
+ c.fillStyle="#111";c.beginPath();c.ellipse(165,22,22,17,0,0,7);c.fill();c.fillStyle="#fff";c.beginPath();c.arc(158,15,5,0,7);c.fill();
+ c.fillStyle="#fff";c.beginPath();c.ellipse(20,-12,15,13,0,0,7);c.fill();c.fillStyle="#5b3412";c.beginPath();c.arc(24,-10,9,0,7);c.fill();c.fillStyle="#fff";c.beginPath();c.arc(27,-14,3,0,7);c.fill();
+ c.strokeStyle="#5b3412";c.lineWidth=5;c.beginPath();c.moveTo(5,-32);c.quadraticCurveTo(22,-40,38,-28);c.stroke();
+ c.fillStyle="#8a4b1f";c.save();c.translate(-50,-20);c.rotate(.2+Math.sin(t*6)*.12);c.beginPath();c.ellipse(0,70,34,80,0,0,7);c.fill();c.restore();
+ c.restore();
+ // big tongue licking the top of the cat's head
+ c.save();c.translate(-40,-100+lk*14);c.rotate(.35);c.fillStyle="#f472b6";c.strokeStyle="#db2777";c.lineWidth=4;c.beginPath();c.ellipse(0,0,58,24,0,0,7);c.fill();c.stroke();c.beginPath();c.moveTo(-40,0);c.lineTo(40,0);c.stroke();c.restore();
+ c.restore();
+ // caption
+ c.save();c.globalAlpha=fade;c.textAlign="center";c.font="900 34px system-ui,sans-serif";c.lineWidth=7;c.strokeStyle="#7c2d12";c.fillStyle="#fff";
+ const cap="SLUUURP! 💦";c.strokeText(cap,W/2,H*.16);c.fillText(cap,W/2,H*.16);c.font="800 20px system-ui,sans-serif";c.lineWidth=5;
+ const c2=cat.name+" got a Hank bath!";c.strokeText(c2,W/2,H*.16+34);c.fillText(c2,W/2,H*.16+34);c.restore()}
 function drawBoy(c,sc,t){c.save();c.scale(sc,sc);const w=Math.sin(t*5)*2;
  // toy stick spanning the whole lane at cat head height (red/white candy stripes)
  const sy=-62+w;c.fillStyle="#fff";c.strokeStyle="#7c2d12";c.lineWidth=2;c.beginPath();c.roundRect(-62,sy-6,124,12,6);c.fill();c.stroke();
@@ -173,7 +243,7 @@ function drawCan(c,sc){c.save();c.scale(sc,sc);c.fillStyle="#64748b";c.fillRect(
  c.fillStyle="#475569";c.beginPath();c.ellipse(0,-72,38,9,0,0,7);c.fill();c.fillRect(-6,-84,12,8);c.fillStyle="#84cc16";c.beginPath();c.arc(14,-80,6,0,7);c.fill();c.restore()}
 function drawFish(c,sc,t){c.save();c.scale(sc,sc);c.translate(0,-30+Math.sin(t*6)*4);c.fillStyle="#38bdf8";c.beginPath();c.ellipse(0,0,16,9,0,0,7);c.fill();
  c.beginPath();c.moveTo(12,0);c.lineTo(26,-10);c.lineTo(26,10);c.fill();c.fillStyle="#fff";c.beginPath();c.arc(-8,-2,3,0,7);c.fill();c.fillStyle="#000";c.beginPath();c.arc(-8,-2,1.4,0,7);c.fill();c.restore()}
-function render(){const t=S.t,hz=H*.36;
+function render(){document.body.classList.toggle("noact",S.mode!=="run");const t=S.t,hz=H*.36;
  const sky=g.createLinearGradient(0,0,0,hz);sky.addColorStop(0,"#3b2a63");sky.addColorStop(1,"#f9a8d4");g.fillStyle=sky;g.fillRect(0,0,W,hz+1);
  g.fillStyle="#fde68a";g.beginPath();g.arc(W*.7,hz*.4,20,0,7);g.fill();
  // ground
@@ -195,12 +265,15 @@ function render(){const t=S.t,hz=H*.36;
   if(o.type==="fish")drawFish(g,sc,t);else if(o.type==="can")drawCan(g,sc);else if(o.type==="boy")drawBoy(g,sc,t);else drawBroom(g,sc,o.mop,o.w||1);g.restore()}
  // cat
  const cat=CATS[catIdx],cp=P(S.x,0,S.y*.12),cs=W/390*1.4;
- if(S.mode!=="caught"||S.caughtT<.5){g.save();g.translate(cp.x,cp.y-20*cs);if((S.flash>0||S.inv>0)&&(t*20|0)%2)g.globalAlpha=.4;drawCat(g,cat,t,cs,S.slide>0&&S.y<=0,S.y);g.restore()}
- // Hank chasing
- const dp=P(S.x*.6,-S.gap*.9);g.save();g.translate(dp.x,dp.y-((S.stumble>0||S.mode==="caught")?Math.max(0,dp.y-H*.93):-10));drawHank(g,cs*1.35*Math.min(1.4,dp.s),t);g.restore();
- if(S.mode==="caught"){const c=S.caughtT;g.save();g.translate(cp.x,cp.y-20*cs);g.rotate(Math.sin(c*20)*.3);drawCat(g,cat,0,cs*(1+Math.sin(c*15)*.1),true,0);g.restore();
-  for(let i=0;i<10;i++){const a=i/10*6.28+c*2,r=40+c*50;g.font=(22+i%3*6)+"px sans-serif";g.fillText(i%2?"💕":"⭐",cp.x+Math.cos(a)*r-12,cp.y-40+Math.sin(a)*r)}g.restore()}
- if(S.mode==="caught"){g.fillStyle="#fff";g.font="bold 22px sans-serif";g.textAlign="center";g.fillText(S.lives>1?"Cuddle break! 💕 "+(S.lives-1)+" lives left":"Last cuddle! 💕",W/2,H*.2);g.textAlign="left"}
- if(S.stumble>0&&S.mode==="run"){g.fillStyle="#fff";g.font="bold 20px sans-serif";g.textAlign="center";g.fillText("Woof! Hank's catching up!",W/2,H*.2);g.textAlign="left"}}
+ if(S.mode!=="caught"){g.save();g.translate(cp.x,cp.y-20*cs);if((S.flash>0||S.inv>0)&&(t*20|0)%2)g.globalAlpha=.4;drawCat(g,cat,t,cs,S.slide>0&&S.y<=0,S.y);g.restore()}
+ // Hank: hidden at 0 hits, head peeks at 1, half body at 2 (always a gap below the cat)
+ const hs=cs*1.7,tgt=S.hits>=2?H-20*hs:S.hits===1?H+12*hs:H+60*hs;if(!S.hankY)S.hankY=H+60*hs;
+ S.hankY+=(tgt-S.hankY)*Math.min(1,(1/60)*6);
+ if(S.mode!=="caught"&&S.hankY<H+45*hs){const a=S.appT;g.save();g.translate(W/2+(cp.x-W/2)*.45,S.hankY);
+  // appears facing the viewer, then flips around to chase the cat
+  let front=a<.7,sx=1;if(a>=.7&&a<1){const k=(a-.7)/.3;sx=Math.abs(Math.cos(k*Math.PI));front=k<.5}g.scale(Math.max(.05,sx),1);
+  front?drawHank(g,hs,t):drawHankBack(g,hs,t);g.restore()}
+ if(S.mode==="caught")drawLickScene(g,cat,S.caughtT);
+ if(S.mode==="run"&&S.hits>0){g.fillStyle="#fff";g.font="bold 20px sans-serif";g.textAlign="center";g.fillText(S.hits===1?"Woof! Hank's sniffing you out!":"Hank's catching up! Last heart!",W/2,H*.2);g.textAlign="left"}}
 let last=performance.now();function loop(n){const dt=Math.min(.05,(n-last)/1000);last=n;update(dt);render();requestAnimationFrame(loop)}
 showStart();requestAnimationFrame(loop);
