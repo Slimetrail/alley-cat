@@ -74,8 +74,49 @@ function buildPicker(){const p=document.createElement("div");p.id="picker";p.sty
   b.append(k,document.createElement("br"),c.name);b.onclick=()=>{catIdx=i;LS.set("ac_cat",c.id);buildPicker()};p.append(b)});
  const old=$("picker");old?old.replaceWith(p):$("play").before(p)}
 function showStart(){$("bestS").textContent="Best: "+S.best+" m";buildPicker()}
-$("play").onclick=()=>{$("start").classList.add("hidden");reset()};
-$("again").onclick=()=>{$("over").classList.add("hidden");reset()};
+$("play").onclick=()=>{if(ptLocked())return showLock();$("start").classList.add("hidden");reset()};
+$("again").onclick=()=>{if(ptLocked())return showLock();$("over").classList.add("hidden");reset()};
+// ===== Secret play-time limit (30 min active play -> 24h nap lock). Stored in localStorage (x2) + IndexedDB, clock-rollback aware. =====
+const PT_LIMIT=30*60*1000,PT_LOCK=24*3600*1000,PTK="ac_pt";
+const PW={salt:"fe4d1b2887cac5c618667e97cf5a474b",it:250000,hash:"c213ec73ca3f48489aea836110b73ec41069737ed24fc8cc33ce871485f489f0"};// PBKDF2-SHA256 of the parent password (password itself is not stored)
+const PT={used:0,lockUntil:0,lastSeen:0,pending:0,off:0};
+const ptNow=()=>Date.now()+PT.off;
+function ptMerge(o){if(!o||typeof o!=="object")return;const n=v=>Number.isFinite(+v)?+v:0;PT.used=Math.max(PT.used,n(o.used));PT.lockUntil=Math.max(PT.lockUntil,n(o.lockUntil));PT.lastSeen=Math.max(PT.lastSeen,n(o.lastSeen));PT.pending=Math.max(PT.pending,n(o.pending))}
+function idb(fn){try{const r=indexedDB.open("alleycat",1);r.onupgradeneeded=()=>r.result.createObjectStore("kv");r.onsuccess=()=>{try{fn(r.result.transaction("kv","readwrite").objectStore("kv"))}catch(e){}}}catch(e){}}
+function ptWrite(){const d=JSON.stringify({used:PT.used,lockUntil:PT.lockUntil,lastSeen:PT.lastSeen,pending:PT.pending});LS.set(PTK,d);LS.set(PTK+"_b",btoa(d));idb(st=>st.put(d,PTK))}
+function ptSave(){PT.lastSeen=Math.max(PT.lastSeen,ptNow());ptWrite()}
+function ptLoad(cb){try{ptMerge(JSON.parse(LS.get(PTK,"{}")))}catch(e){}try{ptMerge(JSON.parse(atob(LS.get(PTK+"_b",""))))}catch(e){}
+ idb(st=>{const g=st.get(PTK);g.onsuccess=()=>{try{ptMerge(JSON.parse(g.result||"{}"))}catch(e){}if(ptLocked())showLock();ptSave();cb&&cb()}})}
+function ptRolledBack(){return ptNow()<PT.lastSeen-60000}
+function ptLocked(){if(PT.lockUntil<=0)return false;if(ptRolledBack())return true;if(ptNow()<PT.lockUntil)return true;PT.lockUntil=0;PT.used=0;PT.pending=0;ptSave();return false}
+function ptLockNow(){PT.lockUntil=ptNow()+PT_LOCK;PT.pending=0;PT.used=0;ptSave()}
+let ptAcc=0;function ptTick(dt){if(document.hidden)return;PT.used+=dt*1000;ptAcc+=dt;if(PT.used>=PT_LIMIT)PT.pending=1;if(ptAcc>5){ptAcc=0;ptSave()}}
+document.addEventListener("visibilitychange",()=>ptSave());
+function showLock(){["start","over","board"].forEach(i=>$(i).classList.add("hidden"));S.mode="locked";$("lock").classList.remove("hidden");drawNap()}
+function drawNap(){const c=$("napC").getContext("2d");c.setTransform(1,0,0,1,0,0);c.clearRect(0,0,440,300);c.translate(220,190);drawHank(c,3,0);
+ c.fillStyle="#b8692e";c.fillRect(-45,-90,90,30);c.strokeStyle="#3b1d0a";c.lineWidth=5;[-24,24].forEach(x=>{c.beginPath();c.arc(x,-72,12,.2,2.9);c.stroke()});
+ c.setTransform(1,0,0,1,0,0);c.fillStyle="#fff";c.font="bold 34px sans-serif";const z=(performance.now()/600)%3;["z","Z","Z"].forEach((t,i)=>{if(i<=z)c.fillText(t,300+i*30,90-i*28)})}
+function lockTick(){if(S.mode!=="locked")return;if(!ptLocked()){$("lock").classList.add("hidden");S.mode="start";showStart();$("start").classList.remove("hidden");return}
+ const t=Math.max(0,(PT.lockUntil-Math.max(ptNow(),PT.lastSeen))/1000|0);$("lockCd").textContent=[t/3600|0,(t/60|0)%60,t%60].map(v=>String(v).padStart(2,"0")).join(":");drawNap()}
+setInterval(lockTick,500);
+window.__pt={PT,ptLocked,ptLoad,ptSave,ptLockNow,showLock,ptTick,lockTick};
+// parent unlock: long-press the moon for 3s, then password (checked against PBKDF2 hash)
+let lp=null;
+$("moonHit").addEventListener("pointerdown",e=>{e.preventDefault();clearTimeout(lp);lp=setTimeout(openParent,3000)});
+["pointerup","pointerleave","pointercancel"].forEach(ev=>$("moonHit").addEventListener(ev,()=>clearTimeout(lp)));
+$("moonHit").addEventListener("contextmenu",e=>e.preventDefault());
+function openParent(){if(S.mode==="run")return;$("pw").value="";$("pinMsg").textContent="";$("pinBox").classList.remove("hidden");$("parentPanel").classList.add("hidden");$("parent").classList.remove("hidden")}
+window.__openParent=openParent;
+async function pwCheck(p){try{const k=await crypto.subtle.importKey("raw",new TextEncoder().encode(p),"PBKDF2",false,["deriveBits"]);
+ const salt=new Uint8Array(PW.salt.match(/../g).map(h=>parseInt(h,16)));const b=new Uint8Array(await crypto.subtle.deriveBits({name:"PBKDF2",hash:"SHA-256",salt,iterations:PW.it},k,256));
+ return[...b].map(x=>x.toString(16).padStart(2,"0")).join("")===PW.hash}catch(e){return false}}
+async function tryPw(){$("pinMsg").textContent="Checking…";const ok=await pwCheck($("pw").value);$("pw").value="";
+ if(ok){$("pinBox").classList.add("hidden");$("parentPanel").classList.remove("hidden");ptInfo()}else $("pinMsg").textContent="Wrong password"}
+$("pwGo").onclick=tryPw;$("pw").addEventListener("keydown",e=>{e.stopPropagation();if(e.key==="Enter")tryPw()});
+function ptInfo(){$("ptInfo").innerHTML="Played: "+Math.round(PT.used/60000)+" / 30 min<br>"+(ptLocked()?"Locked (nap time)":"Not locked")}
+$("pClear").onclick=()=>{PT.lockUntil=0;PT.used=0;PT.pending=0;PT.lastSeen=ptNow();ptWrite();ptInfo();$("lock").classList.add("hidden");if(S.mode==="locked"){S.mode="start";showStart();$("start").classList.remove("hidden")}};
+$("pReset").onclick=()=>{PT.used=0;PT.pending=0;ptSave();ptInfo()};
+$("pinX").onclick=$("pClose").onclick=()=>$("parent").classList.add("hidden");
 // ===== Score + Top 10 =====
 const TOPK="ac_top10";
 function loadTop(){let a;try{a=JSON.parse(LS.get(TOPK,"[]"))}catch(e){a=[]}if(!Array.isArray(a))a=[];
@@ -93,20 +134,20 @@ function buildIni(){const w=$("iniCols");w.innerHTML="";ini.forEach((v,k)=>{cons
  const dn=document.createElement("button");dn.textContent="▼";dn.className="dn";dn.onclick=()=>{ini[k]=(ini[k]+25)%26;buildIni()};c.append(up,L,dn);w.append(c)})}
 $("iniSave").onclick=()=>{if(!pending)return;pending.i=ini.map(v=>String.fromCharCode(65+v)).join("");LS.set("ac_ini",pending.i);const r=insertTop(pending);pending=null;
  $("ini").classList.add("hidden");$("overBoard").innerHTML=boardHTML(r);$("again").classList.remove("hidden");$("home").classList.remove("hidden")};
-function gameOver(){S.mode="over";$("overT").textContent="SLURP! 💦";$("overSub").textContent="Hank gave "+CATS[catIdx].name+" a bath!";const d=Math.round(S.dist),sc=score(S.dist,S.fish);if(d>S.best){S.best=d;LS.set("ac_best",d)}
+function gameOver(){S.mode="over";if(PT.pending)ptLockNow();else ptSave();$("overT").textContent="SLURP! 💦";$("overSub").textContent="Hank gave "+CATS[catIdx].name+" a bath!";const d=Math.round(S.dist),sc=score(S.dist,S.fish);if(d>S.best){S.best=d;LS.set("ac_best",d)}
  $("res").innerHTML=`Distance: <b>${d}</b> m<br>🐟 Fish: <b>${S.fish}</b> × 5 = <b>${S.fish*5}</b><br><span style="font-size:24px">⭐ Score: <b>${sc}</b></span>`;
  $("overBoard").innerHTML="";$("over").classList.remove("hidden");
  if(qualifies(sc)){pending={s:sc,d,f:S.fish};const p=LS.get("ac_ini","AAA");ini=[0,1,2].map(k=>Math.max(0,p.charCodeAt(k)-65)%26);buildIni();$("ini").classList.remove("hidden");$("again").classList.add("hidden");$("home").classList.add("hidden")}
  else{$("ini").classList.add("hidden");$("overBoard").innerHTML=boardHTML(-1);$("again").classList.remove("hidden");$("home").classList.remove("hidden")}}
 $("topBtn").onclick=()=>{$("boardList").innerHTML=boardHTML(-1);$("start").classList.add("hidden");$("board").classList.remove("hidden")};
 $("boardBack").onclick=()=>{$("board").classList.add("hidden");showStart();$("start").classList.remove("hidden")};
-$("home").onclick=()=>{$("over").classList.add("hidden");S.mode="start";showStart();$("start").classList.remove("hidden")};
+$("home").onclick=()=>{if(ptLocked())return showLock();$("over").classList.add("hidden");S.mode="start";showStart();$("start").classList.remove("hidden")};
 function updLives(){$("lives").textContent="❤️".repeat(S.lives)+"🤍".repeat(3-S.lives)}
 // Hits ARE the lives (3 hearts). Hit 1: Hank's head peeks in. Hit 2: half his body. Hit 3: full-screen lick scene, then game over.
 function hit(){if(S.inv>0||S.mode!=="run")return;if(S.hits===0)S.appT=0;S.hits++;S.lives=3-S.hits;updLives();S.flash=.6;if(S.hits>=3){S.mode="caught";S.caughtT=0;howl();return}S.inv=1.2;S.hits===1?bark(1,false):bark(2,true)}
 // ===== Update =====
 function update(dt){S.t+=dt;if(S.mode==="caught"){S.caughtT+=dt;if(S.caughtT>2.6)gameOver();return}if(S.mode!=="run")return;
- S.speed=Math.min(26,9+S.t*.25);const dz=S.speed*dt;S.dist+=dz;
+ ptTick(dt);S.speed=Math.min(26,9+S.t*.25);const dz=S.speed*dt;S.dist+=dz;
  S.x+=(S.lane-S.x)*Math.min(1,dt*14);S.vy-=28*dt;S.y=Math.max(0,S.y+S.vy*dt);if(S.y===0)S.vy=Math.max(0,S.vy);S.slide=Math.max(0,S.slide-dt);
  S.appT+=dt;S.stumble=S.hits;S.flash=Math.max(0,S.flash-dt);S.inv=Math.max(0,S.inv-dt);S.gap+=((S.stumble>0?1.1:3)-S.gap)*Math.min(1,dt*3);
  for(const o of S.objs)o.z-=dz;for(const d of S.deco)d.z-=dz;
@@ -309,4 +350,4 @@ function render(){const t=S.t,hz=H*.36;
  if(S.mode==="caught")drawLickScene(g,cat,S.caughtT);
  if(S.mode==="run"&&S.hits>0){g.fillStyle="#fff";g.font="bold 20px sans-serif";g.textAlign="center";g.fillText(S.hits===1?"Woof! Hank's sniffing you out!":"Hank's catching up! Last heart!",W/2,H*.2);g.textAlign="left"}}
 let last=performance.now();function loop(n){const dt=Math.min(.05,(n-last)/1000);last=n;update(dt);render();requestAnimationFrame(loop)}
-showStart();requestAnimationFrame(loop);
+showStart();ptLoad();requestAnimationFrame(loop);

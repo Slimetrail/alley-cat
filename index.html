@@ -14,6 +14,8 @@ canvas{display:block;width:100vw;height:100vh;height:100dvh}
 .screen p{margin:0;font-size:18px;max-width:330px;line-height:1.4}
 .btn{font-size:26px;font-weight:900;padding:16px 40px;border:0;border-radius:40px;background:#ffd84a;color:#4a2a00;box-shadow:0 6px 0 #c2410c}
 .hidden{display:none!important}
+#moonHit{position:fixed;left:calc(70% - 35px);top:calc(14.4% - 35px);width:70px;height:70px;border-radius:50%;z-index:55;-webkit-touch-callout:none;touch-action:none;-webkit-user-select:none}
+#lock{z-index:40}
 .btn.sm{font-size:18px;padding:10px 26px}.card{background:#0006;border-radius:14px;padding:10px 18px;font-size:17px;line-height:1.5}
 #over{overflow:auto;justify-content:flex-start;padding-top:50px}
 #iniCols{display:flex;gap:14px;justify-content:center;margin:8px 0}.col{display:flex;flex-direction:column;align-items:center;gap:4px}
@@ -23,6 +25,12 @@ table{border-collapse:collapse;font-size:16px;background:#0006;border-radius:12p
 </style></head><body>
 <canvas id="c"></canvas>
 <div id="hud"><span class="pill" id="fish">🐟 0</span><span class="pill" id="dist">0 m</span><span class="pill" id="lives">❤️❤️❤️</span><button id="mute" aria-label="Mute">🔊</button></div>
+<div class="screen hidden" id="lock"><canvas id="napC" width="440" height="300" style="width:220px;height:150px"></canvas><h1 style="font-size:34px">Hank needs a nap! 💤</h1><p>Come back tomorrow for more running!</p><p class="card">Wakes up in <b id="lockCd">--:--:--</b></p></div>
+<div id="moonHit" aria-hidden="true"></div>
+<div class="screen hidden" id="parent" style="z-index:60;background:#1a1330f2"><div id="pinBox"><h1 style="font-size:28px">Parent password</h1>
+<input id="pw" type="password" autocomplete="off" style="font-size:22px;padding:12px;border-radius:12px;border:0;width:240px;text-align:center"><br><br>
+<button class="btn" id="pwGo">🔓 Unlock</button><p id="pinMsg"></p><button class="btn sm" id="pinX">✖ Close</button></div>
+<div id="parentPanel" class="hidden"><h1 style="font-size:28px">Parent controls</h1><p id="ptInfo"></p><button class="btn sm" id="pClear">🔓 Clear lock</button><br><br><button class="btn sm" id="pReset">⏱ Reset play timer</button><br><br><button class="btn sm" id="pClose">✔ Done</button></div></div>
 <div class="screen" id="start"><h1>Alley Cat Run</h1>
 <p>Run from Hank the hound! Swipe ⬅️ ➡️ to switch lanes, swipe ⬆️ to jump brooms &amp; mops, swipe ⬇️ to slide under sticks. Dodge the trash cans and grab fish!</p>
 <p id="bestS">Best: 0 m</p><button class="btn" id="play">▶ Play</button><button class="btn sm" id="topBtn">🏆 Top 10</button><button class="btn sm" id="installBtn" style="background:#22d3ee;box-shadow:0 5px 0 #0e7490;color:#083344">📲 Install app</button><div id="installHelp" class="card hidden">Tap Chrome's <b>⋮</b> menu → <b>Install app</b> / <b>Add to Home screen</b><br><small>(iPhone: Share ⬆️ → Add to Home Screen)</small><br><button class="btn sm" id="helpOk" style="margin-top:8px">OK</button></div><p style="font-size:14px;opacity:.7">Keyboard: arrows or WASD</p></div>
@@ -31,8 +39,8 @@ table{border-collapse:collapse;font-size:16px;background:#0006;border-radius:12p
 <div id="ini" class="hidden"><p><b>🎉 Top 10! Pick your initials</b></p><div id="iniCols"></div><button class="btn" id="iniSave">✔ Save</button></div>
 <div id="overBoard"></div><button class="btn" id="again">🔁 Run again</button><button class="btn sm" id="home">🏠 Home</button></div>
 <div class="screen hidden" id="board"><h1>🏆 Top 10</h1><div id="boardList"></div><button class="btn" id="boardBack">⬅ Back</button></div>
-<script src="game.js?v=10"></script>
-<script>if('serviceWorker'in navigator&&location.protocol!=='file:')navigator.serviceWorker.register('sw.js?v=10');</script>
+<script src="game.js?v=11"></script>
+<script>if('serviceWorker'in navigator&&location.protocol!=='file:')navigator.serviceWorker.register('sw.js?v=11');</script>
 <script>
 let deferredPrompt=null;const ib=document.getElementById("installBtn"),hp=document.getElementById("installHelp");
 const standalone=()=>matchMedia("(display-mode: standalone)").matches||matchMedia("(display-mode: fullscreen)").matches||navigator.standalone;
