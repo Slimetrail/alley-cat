@@ -71,7 +71,7 @@ function buildIni(){const w=$("iniCols");w.innerHTML="";ini.forEach((v,k)=>{cons
  const dn=document.createElement("button");dn.textContent="▼";dn.className="dn";dn.onclick=()=>{ini[k]=(ini[k]+25)%26;buildIni()};c.append(up,L,dn);w.append(c)})}
 $("iniSave").onclick=()=>{if(!pending)return;pending.i=ini.map(v=>String.fromCharCode(65+v)).join("");LS.set("ac_ini",pending.i);const r=insertTop(pending);pending=null;
  $("ini").classList.add("hidden");$("overBoard").innerHTML=boardHTML(r);$("again").classList.remove("hidden");$("home").classList.remove("hidden")};
-function gameOver(){S.mode="over";const d=Math.round(S.dist),sc=score(S.dist,S.fish);if(d>S.best){S.best=d;LS.set("ac_best",d)}
+function gameOver(){S.mode="over";$("overT").textContent="SLURP! 💦";$("overSub").textContent="Hank gave "+CATS[catIdx].name+" a bath!";const d=Math.round(S.dist),sc=score(S.dist,S.fish);if(d>S.best){S.best=d;LS.set("ac_best",d)}
  $("res").innerHTML=`Distance: <b>${d}</b> m<br>🐟 Fish: <b>${S.fish}</b> × 5 = <b>${S.fish*5}</b><br><span style="font-size:24px">⭐ Score: <b>${sc}</b></span>`;
  $("overBoard").innerHTML="";$("over").classList.remove("hidden");
  if(qualifies(sc)){pending={s:sc,d,f:S.fish};const p=LS.get("ac_ini","AAA");ini=[0,1,2].map(k=>Math.max(0,p.charCodeAt(k)-65)%26);buildIni();$("ini").classList.remove("hidden");$("again").classList.add("hidden");$("home").classList.add("hidden")}
@@ -165,7 +165,7 @@ function drawHankBack(c,sc,run){c.save();c.scale(sc,sc);const b=Math.abs(Math.si
  const tw=Math.sin(run*14)*16;c.lineCap="round";c.strokeStyle=K;c.lineWidth=6;c.beginPath();c.moveTo(0,14);c.quadraticCurveTo(tw*.6,-6,tw*1.4,-34);c.stroke();
  c.strokeStyle=T;c.lineWidth=7;c.beginPath();c.moveTo(0,14);c.lineTo(tw*.15,6);c.stroke();c.fillStyle=W_;c.beginPath();c.ellipse(tw*1.4,-36,4,6,0,0,7);c.fill();
  c.restore()}
-function drawLickScene(c,cat,t){const k=Math.min(W,H*.6)/390*.82,cx=W*.6,cy=H*.62,lk=(Math.sin(t*8)+1)/2,fade=Math.min(1,t*4);
+function drawLickScene(c,cat,t){const k=Math.min(W,H*.6)/390*.74,cx=W*.65,cy=H*.62,lk=(Math.sin(t*8)+1)/2,fade=Math.min(1,t*4);
  c.save();c.globalAlpha=fade;const bg=c.createRadialGradient(W/2,H/2,50,W/2,H/2,H*.7);bg.addColorStop(0,"#fde68a");bg.addColorStop(1,"#f59e0b");c.fillStyle=bg;c.fillRect(0,0,W,H);
  c.fillStyle="#ffffff30";for(let i=0;i<12;i++){c.beginPath();c.moveTo(W/2,H/2);c.arc(W/2,H/2,H,i*.52+t*.3,i*.52+.26+t*.3);c.fill()}
  c.translate(cx,cy);c.scale(k,k);
@@ -269,7 +269,7 @@ function render(){document.body.classList.toggle("noact",S.mode!=="run");const t
  // Hank: hidden at 0 hits, head peeks at 1, half body at 2 (always a gap below the cat)
  const hs=cs*1.7,tgt=S.hits>=2?H-20*hs:S.hits===1?H+12*hs:H+60*hs;if(!S.hankY)S.hankY=H+60*hs;
  S.hankY+=(tgt-S.hankY)*Math.min(1,(1/60)*6);
- if(S.mode!=="caught"&&S.hankY<H+45*hs){const a=S.appT;g.save();g.translate(W/2+(cp.x-W/2)*.45,S.hankY);
+ if(S.mode!=="caught"&&S.hankY<H+45*hs){const a=S.appT;g.save();g.translate(W/2,S.hankY);
   // appears facing the viewer, then flips around to chase the cat
   let front=a<.7,sx=1;if(a>=.7&&a<1){const k=(a-.7)/.3;sx=Math.abs(Math.cos(k*Math.PI));front=k<.5}g.scale(Math.max(.05,sx),1);
   front?drawHank(g,hs,t):drawHankBack(g,hs,t);g.restore()}
