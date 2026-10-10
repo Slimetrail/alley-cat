@@ -29,12 +29,21 @@ table{border-collapse:collapse;font-size:16px;background:#0006;border-radius:12p
 <button class="act" id="duckB" aria-label="Duck">⬇️<br>DUCK</button><button class="act" id="jumpB" aria-label="Jump">⬆️<br>JUMP</button>
 <div class="screen" id="start"><h1>Alley Cat Run</h1>
 <p>Run from Hank the hound! Swipe ⬅️➡️ to switch lanes, ⬆️ to jump brooms &amp; mops, ⬇️ to slide under sticks. Dodge the trash cans and grab fish!</p>
-<p id="bestS">Best: 0 m</p><button class="btn" id="play">▶ Play</button><button class="btn sm" id="topBtn">🏆 Top 10</button><p style="font-size:14px;opacity:.7">Keyboard: arrows or WASD</p></div>
+<p id="bestS">Best: 0 m</p><button class="btn" id="play">▶ Play</button><button class="btn sm" id="topBtn">🏆 Top 10</button><button class="btn sm" id="installBtn" style="background:#22d3ee;box-shadow:0 5px 0 #0e7490;color:#083344">📲 Install app</button><div id="installHelp" class="card hidden">Tap Chrome's <b>⋮</b> menu → <b>Install app</b> / <b>Add to Home screen</b><br><small>(iPhone: Share ⬆️ → Add to Home Screen)</small><br><button class="btn sm" id="helpOk" style="margin-top:8px">OK</button></div><p style="font-size:14px;opacity:.7">Keyboard: arrows or WASD</p></div>
 <div class="screen hidden" id="over"><h1 id="overT">SLURP! 💦</h1><p id="overSub">Hank gave your cat a bath!</p>
 <div id="res" class="card"></div>
 <div id="ini" class="hidden"><p><b>🎉 Top 10! Pick your initials</b></p><div id="iniCols"></div><button class="btn" id="iniSave">✔ Save</button></div>
 <div id="overBoard"></div><button class="btn" id="again">🔁 Run again</button><button class="btn sm" id="home">🏠 Home</button></div>
 <div class="screen hidden" id="board"><h1>🏆 Top 10</h1><div id="boardList"></div><button class="btn" id="boardBack">⬅ Back</button></div>
-<script src="game.js?v=6"></script>
-<script>if('serviceWorker'in navigator&&location.protocol!=='file:')navigator.serviceWorker.register('sw.js?v=6');</script>
+<script src="game.js?v=7"></script>
+<script>if('serviceWorker'in navigator&&location.protocol!=='file:')navigator.serviceWorker.register('sw.js?v=7');</script>
+<script>
+let deferredPrompt=null;const ib=document.getElementById("installBtn"),hp=document.getElementById("installHelp");
+const standalone=()=>matchMedia("(display-mode: standalone)").matches||matchMedia("(display-mode: fullscreen)").matches||navigator.standalone;
+if(standalone())ib.classList.add("hidden");
+addEventListener("beforeinstallprompt",e=>{e.preventDefault();deferredPrompt=e});
+addEventListener("appinstalled",()=>{ib.classList.add("hidden");hp.classList.add("hidden");deferredPrompt=null});
+ib.onclick=async()=>{if(deferredPrompt){deferredPrompt.prompt();const r=await deferredPrompt.userChoice;deferredPrompt=null;if(r.outcome==="accepted")ib.classList.add("hidden")}else hp.classList.remove("hidden")};
+document.getElementById("helpOk").onclick=()=>hp.classList.add("hidden");
+</script>
 </body></html>
