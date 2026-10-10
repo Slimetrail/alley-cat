@@ -18,6 +18,29 @@ let muted=LS.get("ac_mute","0")==="1",AC=null;const muteB=document.getElementByI
 function updMute(){muteB.textContent=muted?"🔇":"🔊"}updMute();
 muteB.onclick=e=>{e.stopPropagation();muted=!muted;LS.set("ac_mute",muted?"1":"0");updMute()};
 function beep(f,d=.1,type="square",f2){if(muted)return;try{AC=AC||new(window.AudioContext||window.webkitAudioContext)();const o=AC.createOscillator(),v=AC.createGain(),t=AC.currentTime;o.type=type;o.frequency.setValueAtTime(f,t);if(f2)o.frequency.exponentialRampToValueAtTime(f2,t+d);v.gain.setValueAtTime(.08,t);v.gain.exponentialRampToValueAtTime(.001,t+d);o.connect(v).connect(AC.destination);o.start(t);o.stop(t+d)}catch(e){}}
+// Synthesized meows (source-filter: sawtooth + glottal vibrato through gliding formant filters). Throttled, respects mute.
+let lastMeow=0,meowNode=null;
+function meow(kind){if(muted)return;const now=performance.now();if(now-lastMeow<220)return;lastMeow=now;
+ try{AC=AC||new(window.AudioContext||window.webkitAudioContext)();if(AC.state==="suspended")AC.resume();
+  if(meowNode){try{meowNode.stop()}catch(e){}}
+  const t=AC.currentTime,up=kind==="jump",d=up?.32:.5,o=AC.createOscillator(),v=AC.createOscillator(),vg=AC.createGain(),out=AC.createGain(),mix=AC.createGain();
+  o.type="sawtooth";const p=up?[520,900,780]:[330,420,250];o.frequency.setValueAtTime(p[0],t);o.frequency.linearRampToValueAtTime(p[1],t+d*.45);o.frequency.exponentialRampToValueAtTime(p[2],t+d);
+  v.frequency.value=up?7:5.5;vg.gain.value=up?12:9;v.connect(vg).connect(o.frequency);
+  const F=up?[[900,2400],[1700,3000],[1100,2600]]:[[600,1300],[900,1900],[550,1000]];// m -> e/a -> w/u formants
+  [0,1].forEach(i=>{const f=AC.createBiquadFilter();f.type="bandpass";f.Q.value=i?9:6;f.frequency.setValueAtTime(F[0][i],t);f.frequency.linearRampToValueAtTime(F[1][i],t+d*.4);f.frequency.linearRampToValueAtTime(F[2][i],t+d);
+   const g2=AC.createGain();g2.gain.value=i?.6:1;o.connect(f).connect(g2).connect(mix)});
+  mix.connect(out).connect(AC.destination);out.gain.setValueAtTime(.0001,t);out.gain.exponentialRampToValueAtTime(up?.5:.55,t+.04);out.gain.setValueAtTime(up?.5:.55,t+d*.6);out.gain.exponentialRampToValueAtTime(.0001,t+d);
+  o.start(t);v.start(t);o.stop(t+d+.02);v.stop(t+d+.02);meowNode=o;window.__meows=(window.__meows||0)+1}catch(e){}}
+window.__meow=meow;
+// Synthesized basset "ROOF" bark and "aroooo" howl
+function voice(t,d,pts,form,vol,vib){const o=AC.createOscillator(),out=AC.createGain();o.type="sawtooth";o.frequency.setValueAtTime(pts[0],t);pts.slice(1).forEach(([f,k])=>o.frequency.linearRampToValueAtTime(f,t+d*k));
+ if(vib){const v=AC.createOscillator(),vg=AC.createGain();v.frequency.value=vib[0];vg.gain.value=vib[1];v.connect(vg).connect(o.frequency);v.start(t);v.stop(t+d+.05)}
+ form.forEach(([a,b,q,g])=>{const f=AC.createBiquadFilter();f.type="bandpass";f.Q.value=q;f.frequency.setValueAtTime(a,t);f.frequency.linearRampToValueAtTime(b,t+d);const gg=AC.createGain();gg.gain.value=g;o.connect(f).connect(gg).connect(out)});
+ out.connect(AC.destination);out.gain.setValueAtTime(.0001,t);out.gain.exponentialRampToValueAtTime(vol,t+.025);out.gain.setValueAtTime(vol,t+d*.5);out.gain.exponentialRampToValueAtTime(.0001,t+d);o.start(t);o.stop(t+d+.05)}
+function bark(n,loud){if(muted)return;try{AC=AC||new(window.AudioContext||window.webkitAudioContext)();const t=AC.currentTime;
+ for(let i=0;i<n;i++)voice(t+i*.26,.22,[150,[230,.25],[120,1]],[[500,350,4,1.4],[1100,800,6,.7],[2400,1800,8,.25]],loud?1.1:.75,null);window.__barks=(window.__barks||0)+n}catch(e){}}
+function howl(){if(muted)return;try{AC=AC||new(window.AudioContext||window.webkitAudioContext)();const t=AC.currentTime;
+ voice(t,1.8,[240,[420,.25],[460,.6],[300,1]],[[500,900,5,1.2],[900,1200,7,.6],[2300,2600,9,.2]],.6,[5,10]);window.__howls=(window.__howls||0)+1}catch(e){}}
 // ===== State =====
 const S={mode:"start",t:0,speed:0,dist:0,fish:0,lane:0,x:0,y:0,vy:0,slide:0,stumble:0,gap:3,objs:[],deco:[],nextRow:20,caughtT:0,best:+LS.get("ac_best","0")||0,flash:0,lives:3,inv:0,hits:0,hitT:0,appT:0,hankY:0};
 window.__ac=S;
@@ -37,7 +60,7 @@ window.__genRow=genRow;
 // ===== Input =====
 function act(a){if(S.mode!=="run")return;
  if(a==="L"&&S.lane>-1){S.lane--;beep(500,.06)}if(a==="R"&&S.lane<1){S.lane++;beep(500,.06)}
- if(a==="U"&&S.y<=0){S.vy=9.5;S.slide=0;beep(400,.18,"square",900)}if(a==="D"){S.slide=.75;if(S.y>0)S.vy=-14;beep(300,.15,"sawtooth",120)}}
+ if(a==="U"&&S.y<=0){S.vy=9.5;S.slide=0;meow("jump")}if(a==="D"){S.slide=.75;if(S.y>0)S.vy=-14;meow("duck")}}
 window.__act=act;
 ["jumpB","duckB"].forEach(id=>{const el=document.getElementById(id);el.addEventListener("pointerdown",e=>{e.preventDefault();e.stopPropagation();act(id==="jumpB"?"U":"D")})});
 addEventListener("keydown",e=>{const m={ArrowLeft:"L",a:"L",A:"L",ArrowRight:"R",d:"R",D:"R",ArrowUp:"U",w:"U",W:"U"," ":"U",ArrowDown:"D",s:"D",S:"D"}[e.key];if(m){e.preventDefault();act(m)}});
@@ -81,7 +104,7 @@ $("boardBack").onclick=()=>{$("board").classList.add("hidden");showStart();$("st
 $("home").onclick=()=>{$("over").classList.add("hidden");S.mode="start";showStart();$("start").classList.remove("hidden")};
 function updLives(){$("lives").textContent="❤️".repeat(S.lives)+"🤍".repeat(3-S.lives)}
 // Hits ARE the lives (3 hearts). Hit 1: Hank's head peeks in. Hit 2: half his body. Hit 3: full-screen lick scene, then game over.
-function hit(){if(S.inv>0||S.mode!=="run")return;if(S.hits===0)S.appT=0;S.hits++;S.lives=3-S.hits;updLives();S.flash=.6;if(S.hits>=3){S.mode="caught";S.caughtT=0;beep(200,.5,"triangle",600);return}S.inv=1.2;beep(150,.25,"sawtooth",80)}
+function hit(){if(S.inv>0||S.mode!=="run")return;if(S.hits===0)S.appT=0;S.hits++;S.lives=3-S.hits;updLives();S.flash=.6;if(S.hits>=3){S.mode="caught";S.caughtT=0;howl();return}S.inv=1.2;S.hits===1?bark(1,false):bark(2,true)}
 // ===== Update =====
 function update(dt){S.t+=dt;if(S.mode==="caught"){S.caughtT+=dt;if(S.caughtT>2.6)gameOver();return}if(S.mode!=="run")return;
  S.speed=Math.min(26,9+S.t*.25);const dz=S.speed*dt;S.dist+=dz;
