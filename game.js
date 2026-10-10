@@ -79,14 +79,17 @@ $("again").onclick=()=>{if(ptLocked())return showLock();$("over").classList.add(
 // ===== Secret play-time limit (30 min active play -> 24h nap lock). Stored in localStorage (x2) + IndexedDB, clock-rollback aware. =====
 const PT_LIMIT=30*60*1000,PT_LOCK=24*3600*1000,PTK="ac_pt";
 const PW={salt:"fe4d1b2887cac5c618667e97cf5a474b",it:250000,hash:"c213ec73ca3f48489aea836110b73ec41069737ed24fc8cc33ce871485f489f0"};// PBKDF2-SHA256 of the parent password (password itself is not stored)
-const PT={used:0,lockUntil:0,lastSeen:0,pending:0,off:0};
+const PT={used:0,lockUntil:0,lastSeen:0,pending:0,rev:0,off:0};
 const ptNow=()=>Date.now()+PT.off;
-function ptMerge(o){if(!o||typeof o!=="object")return;const n=v=>Number.isFinite(+v)?+v:0;PT.used=Math.max(PT.used,n(o.used));PT.lockUntil=Math.max(PT.lockUntil,n(o.lockUntil));PT.lastSeen=Math.max(PT.lastSeen,n(o.lastSeen));PT.pending=Math.max(PT.pending,n(o.pending))}
+// Newest record (highest rev) wins; lastSeen is always the max seen anywhere (rollback detection). If the two localStorage copies disagree, be strict (take max).
+function ptMerge(o,strict){if(!o||typeof o!=="object")return;const n=v=>Number.isFinite(+v)?+v:0;PT.lastSeen=Math.max(PT.lastSeen,n(o.lastSeen));
+ if(strict){PT.used=Math.max(PT.used,n(o.used));PT.lockUntil=Math.max(PT.lockUntil,n(o.lockUntil));PT.pending=Math.max(PT.pending,n(o.pending));PT.rev=Math.max(PT.rev,n(o.rev));return}
+ if(n(o.rev)>=PT.rev){PT.rev=n(o.rev);PT.used=n(o.used);PT.lockUntil=n(o.lockUntil);PT.pending=n(o.pending)}}
 function idb(fn){try{const r=indexedDB.open("alleycat",1);r.onupgradeneeded=()=>r.result.createObjectStore("kv");r.onsuccess=()=>{try{fn(r.result.transaction("kv","readwrite").objectStore("kv"))}catch(e){}}}catch(e){}}
-function ptWrite(){const d=JSON.stringify({used:PT.used,lockUntil:PT.lockUntil,lastSeen:PT.lastSeen,pending:PT.pending});LS.set(PTK,d);LS.set(PTK+"_b",btoa(d));idb(st=>st.put(d,PTK))}
+function ptWrite(){PT.rev++;const d=JSON.stringify({rev:PT.rev,used:PT.used,lockUntil:PT.lockUntil,lastSeen:PT.lastSeen,pending:PT.pending});LS.set(PTK,d);LS.set(PTK+"_b",btoa(d));idb(st=>st.put(d,PTK))}
 function ptSave(){PT.lastSeen=Math.max(PT.lastSeen,ptNow());ptWrite()}
-function ptLoad(cb){try{ptMerge(JSON.parse(LS.get(PTK,"{}")))}catch(e){}try{ptMerge(JSON.parse(atob(LS.get(PTK+"_b",""))))}catch(e){}
- idb(st=>{const g=st.get(PTK);g.onsuccess=()=>{try{ptMerge(JSON.parse(g.result||"{}"))}catch(e){}if(ptLocked())showLock();ptSave();cb&&cb()}})}
+function ptLoad(cb){let a=LS.get(PTK,""),b2="";try{b2=atob(LS.get(PTK+"_b",""))}catch(e){}const strict=a!==b2;try{ptMerge(JSON.parse(a||"{}"),strict)}catch(e){}try{ptMerge(JSON.parse(b2||"{}"),strict)}catch(e){}
+ idb(st=>{const g=st.get(PTK);g.onsuccess=()=>{try{ptMerge(JSON.parse(g.result||"{}"),strict)}catch(e){}if(ptLocked())showLock();ptSave();cb&&cb()}})}
 function ptRolledBack(){return ptNow()<PT.lastSeen-60000}
 function ptLocked(){if(PT.lockUntil<=0)return false;if(ptRolledBack())return true;if(ptNow()<PT.lockUntil)return true;PT.lockUntil=0;PT.used=0;PT.pending=0;ptSave();return false}
 function ptLockNow(){PT.lockUntil=ptNow()+PT_LOCK;PT.pending=0;PT.used=0;ptSave()}
