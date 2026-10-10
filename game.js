@@ -62,7 +62,6 @@ function act(a){if(S.mode!=="run")return;
  if(a==="L"&&S.lane>-1){S.lane--;beep(500,.06)}if(a==="R"&&S.lane<1){S.lane++;beep(500,.06)}
  if(a==="U"&&S.y<=0){S.vy=9.5;S.slide=0;meow("jump")}if(a==="D"){S.slide=.75;if(S.y>0)S.vy=-14;meow("duck")}}
 window.__act=act;
-["jumpB","duckB"].forEach(id=>{const el=document.getElementById(id);el.addEventListener("pointerdown",e=>{e.preventDefault();e.stopPropagation();act(id==="jumpB"?"U":"D")})});
 addEventListener("keydown",e=>{const m={ArrowLeft:"L",a:"L",A:"L",ArrowRight:"R",d:"R",D:"R",ArrowUp:"U",w:"U",W:"U"," ":"U",ArrowDown:"D",s:"D",S:"D"}[e.key];if(m){e.preventDefault();act(m)}});
 let ts=null;cv.addEventListener("touchstart",e=>{const t=e.touches[0];ts={x:t.clientX,y:t.clientY,done:0}},{passive:true});
 cv.addEventListener("touchmove",e=>{if(!ts||ts.done)return;const t=e.touches[0],dx=t.clientX-ts.x,dy=t.clientY-ts.y;if(Math.max(Math.abs(dx),Math.abs(dy))>30){ts.done=1;act(Math.abs(dx)>Math.abs(dy)?(dx<0?"L":"R"):(dy<0?"U":"D"))}},{passive:true});
@@ -266,7 +265,7 @@ function drawCan(c,sc){c.save();c.scale(sc,sc);c.fillStyle="#64748b";c.fillRect(
  c.fillStyle="#475569";c.beginPath();c.ellipse(0,-72,38,9,0,0,7);c.fill();c.fillRect(-6,-84,12,8);c.fillStyle="#84cc16";c.beginPath();c.arc(14,-80,6,0,7);c.fill();c.restore()}
 function drawFish(c,sc,t){c.save();c.scale(sc,sc);c.translate(0,-30+Math.sin(t*6)*4);c.fillStyle="#38bdf8";c.beginPath();c.ellipse(0,0,16,9,0,0,7);c.fill();
  c.beginPath();c.moveTo(12,0);c.lineTo(26,-10);c.lineTo(26,10);c.fill();c.fillStyle="#fff";c.beginPath();c.arc(-8,-2,3,0,7);c.fill();c.fillStyle="#000";c.beginPath();c.arc(-8,-2,1.4,0,7);c.fill();c.restore()}
-function render(){document.body.classList.toggle("noact",S.mode!=="run");const t=S.t,hz=H*.36;
+function render(){const t=S.t,hz=H*.36;
  const sky=g.createLinearGradient(0,0,0,hz);sky.addColorStop(0,"#3b2a63");sky.addColorStop(1,"#f9a8d4");g.fillStyle=sky;g.fillRect(0,0,W,hz+1);
  g.fillStyle="#fde68a";g.beginPath();g.arc(W*.7,hz*.4,20,0,7);g.fill();
  // ground
@@ -289,7 +288,7 @@ function render(){document.body.classList.toggle("noact",S.mode!=="run");const t
  // cat
  const cat=CATS[catIdx],cp=P(S.x,0,S.y*.12),cs=W/390*1.4;
  if(S.mode!=="caught"){g.save();g.translate(cp.x,cp.y-20*cs);if((S.flash>0||S.inv>0)&&(t*20|0)%2)g.globalAlpha=.4;drawCat(g,cat,t,cs,S.slide>0&&S.y<=0,S.y);g.restore()}
- // Hank: hidden at 0 hits, head peeks at 1, half body at 2 (always a gap below the cat)
+ // Hank: hidden at 0 hits, head peeks at 1, half body at 2 (centered at the bottom, gap below the cat)
  const hs=cs*1.7,tgt=S.hits>=2?H-20*hs:S.hits===1?H+12*hs:H+60*hs;if(!S.hankY)S.hankY=H+60*hs;
  S.hankY+=(tgt-S.hankY)*Math.min(1,(1/60)*6);
  if(S.mode!=="caught"&&S.hankY<H+45*hs){const a=S.appT;g.save();g.translate(W/2,S.hankY);
