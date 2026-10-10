@@ -45,7 +45,7 @@ function howl(){if(muted)return;try{AC=AC||new(window.AudioContext||window.webki
 const S={mode:"start",t:0,speed:0,dist:0,fish:0,lane:0,x:0,y:0,vy:0,slide:0,stumble:0,gap:3,objs:[],deco:[],nextRow:20,caughtT:0,best:+LS.get("ac_best","0")||0,flash:0,lives:3,inv:0,hits:0,hitT:0,appT:0,hankY:0};
 window.__ac=S;
 function reset(){Object.assign(S,{mode:"run",t:0,speed:9,dist:0,fish:0,lane:0,x:0,y:0,vy:0,slide:0,stumble:0,gap:3,objs:[],nextRow:25,caughtT:0,lives:3,inv:0,hits:0,hitT:0,appT:0,hankY:0});S.deco=[];updLives();for(let z=0;z<80;z+=6)addDeco(z)}
-function addDeco(z){const side=Math.random()<.5?-1:1;S.deco.push({z,side,k:["can","escape","puddle","bin"][Math.random()*4|0]})}
+function addDeco(z){const side=Math.random()<.5?-1:1;S.deco.push({z,side,k:["door","escape","puddle","door","door"][Math.random()*5|0],col:Math.random()*5|0,light:Math.random()<.5,metal:Math.random()<.4})}
 const spawn=(type,lane,z)=>S.objs.push({type,lane,z});window.__spawn=spawn;
 // Row generator: cans in random lanes (1 or 2 blocked, never 3); long brooms/mops span 1-3 lanes (jumpable);
 // free lane of a 2-can row is never more than 1 lane from the previous row's free lane (no impossible double switches).
@@ -237,6 +237,17 @@ function drawLickScene(c,cat,t){const k=Math.min(W,H*.6)/390*.74,cx=W*.65,cy=H*.
  c.save();c.globalAlpha=fade;c.textAlign="center";c.font="900 34px system-ui,sans-serif";c.lineWidth=7;c.strokeStyle="#7c2d12";c.fillStyle="#fff";
  const cap="SLUUURP! 💦";c.strokeText(cap,W/2,H*.16);c.fillText(cap,W/2,H*.16);c.font="800 20px system-ui,sans-serif";c.lineWidth=5;
  const c2=cat.name+" got a Hank bath!";c.strokeText(c2,W/2,H*.16+34);c.fillText(c2,W/2,H*.16+34);c.restore()}
+// Back-alley door set into the side wall, drawn on the wall plane in perspective
+const DOORC=["#7c2d12","#1e3a8a","#166534","#4b5563","#7e22ce"];
+function drawDoor(c,o){const X=o.side*1.6,z0=o.z,z1=o.z+1.1,q=(z,h)=>P(X,z,h);
+ const quad=(za,zb,ha,hb,fill,stroke)=>{const a=q(za,ha),b=q(zb,ha),d=q(zb,hb),e=q(za,hb);c.beginPath();c.moveTo(a.x,a.y);c.lineTo(b.x,b.y);c.lineTo(d.x,d.y);c.lineTo(e.x,e.y);c.closePath();c.fillStyle=fill;c.fill();if(stroke){c.strokeStyle=stroke;c.lineWidth=Math.max(1,2*a.s);c.stroke()}};
+ // step (concrete slab on the ground in front of the door)
+ const st=[P(X,z0-.1),P(X,z1+.1),P(X-o.side*.22,z1+.1),P(X-o.side*.22,z0-.1)];c.beginPath();st.forEach((p,i)=>i?c.lineTo(p.x,p.y):c.moveTo(p.x,p.y));c.closePath();c.fillStyle="#a8a29e";c.fill();c.strokeStyle="#78716c";c.lineWidth=1;c.stroke();
+ quad(z0-.12,z1+.12,0,2.25,"#3f3f46");// frame
+ quad(z0,z1,0,2.1,o.metal?"#64748b":DOORC[o.col],"#00000055");// door
+ if(o.metal){for(let h=.4;h<2;h+=.45)quad(z0+.05,z1-.05,h,h+.04,"#94a3b8")}else{quad(z0+.15,z1-.15,1.15,1.9,"#00000022");quad(z0+.15,z1-.15,.25,1,"#00000022")}
+ const kz=o.side>0?z0+.18:z0+.18,k=q(kz,1.0);c.fillStyle="#facc15";c.beginPath();c.arc(k.x,k.y,Math.max(1.5,5*k.s),0,7);c.fill();
+ if(o.light){const l=q((z0+z1)/2,2.45);c.fillStyle="#fde68a44";c.beginPath();c.arc(l.x,l.y+6*l.s,40*l.s,0,7);c.fill();c.fillStyle="#1f2937";c.fillRect(l.x-8*l.s,l.y-4*l.s,16*l.s,5*l.s);c.fillStyle="#fef08a";c.beginPath();c.arc(l.x,l.y+3*l.s,6*l.s,0,Math.PI);c.fill()}}
 function drawBoy(c,sc,t){c.save();c.scale(sc,sc);const w=Math.sin(t*5)*2;
  // toy stick spanning the whole lane at cat head height (red/white candy stripes)
  const sy=-62+w;c.fillStyle="#fff";c.strokeStyle="#7c2d12";c.lineWidth=2;c.beginPath();c.roundRect(-62,sy-6,124,12,6);c.fill();c.stroke();
@@ -282,7 +293,7 @@ function render(){const t=S.t,hz=H*.36;
   if(it.d){const p=P(o.side*1.45,o.z),sc=p.s*W/450;g.save();g.translate(p.x,p.y);
    if(o.k==="puddle"){g.fillStyle="#60a5fa88";g.beginPath();g.ellipse(-o.side*20*sc,0,40*sc,9*sc,0,0,7);g.fill()}
    else if(o.k==="escape"){const q=P(o.side*1.6,o.z,2.2);g.restore();g.save();g.strokeStyle="#1f2937";g.lineWidth=Math.max(1,3*p.s);g.strokeRect(q.x-(o.side>0?30:0)*p.s,q.y,30*p.s,25*p.s);for(let i=0;i<4;i++){g.beginPath();g.moveTo(q.x-(o.side>0?30:0)*p.s,q.y+i*7*p.s);g.lineTo(q.x+(o.side>0?0:30)*p.s,q.y+i*7*p.s);g.stroke()}}
-   else{drawCan(g,sc*.7)}g.restore();continue}
+   else{g.restore();g.save();drawDoor(g,o)}g.restore();continue}
   const p=P(o.lane,o.z),sc=p.s*W/300;g.save();g.translate(p.x,p.y);
   if(o.type==="fish")drawFish(g,sc,t);else if(o.type==="can")drawCan(g,sc);else if(o.type==="boy")drawBoy(g,sc,t);else drawBroom(g,sc,o.mop,o.w||1);g.restore()}
  // cat
